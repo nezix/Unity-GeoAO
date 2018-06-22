@@ -89,7 +89,7 @@ public class geoAO : MonoBehaviour {
 
 		getBounds();
 
-		Vector3 boundMax = allBounds.max;
+		Vector3 boundMax = allBounds.size;
 		float radSurface = Mathf.Max(boundMax.x,Mathf.Max(boundMax.y,boundMax.z));
 		rayDir = new Vector3[(int)samplesAO];
 
