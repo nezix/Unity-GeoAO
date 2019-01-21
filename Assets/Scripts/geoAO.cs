@@ -37,7 +37,7 @@ public class geoAO : MonoBehaviour {
         WayTooMuch = 2048
     }
 
-    public LayerMask AOLayer;
+    private LayerMask AOLayer;
 
     public samplesAOpreset samplesAO = samplesAOpreset.High;
 
@@ -155,6 +155,10 @@ public class geoAO : MonoBehaviour {
         AOCam.clearFlags = CameraClearFlags.Depth;
         AOCam.nearClipPlane = 0.1f;
         AOCam.farClipPlane = 500f;
+        AOCam.allowHDR = false;
+        AOCam.allowMSAA = false;
+        AOCam.allowDynamicResolution = false;
+
 
         AOCam.depthTextureMode = DepthTextureMode.Depth ;
 
@@ -168,10 +172,10 @@ public class geoAO : MonoBehaviour {
         float targetRatio = allBounds.size.x / allBounds.size.y;
 
         if (screenRatio >= targetRatio)
-            AOCam.orthographicSize = 1.1f * (allBounds.size.y / 2);
+            AOCam.orthographicSize = 2.0f * (allBounds.size.y / 2);
         else {
             float differenceInSize = targetRatio / screenRatio;
-            AOCam.orthographicSize = 1.1f * (allBounds.size.y / 2 * differenceInSize);
+            AOCam.orthographicSize = 2.0f * (allBounds.size.y / 2 * differenceInSize);
         }
 
         AOMat = new Material(Shader.Find("Custom/VertexAO"));
@@ -292,6 +296,7 @@ public class geoAO : MonoBehaviour {
 
             AOMat.SetMatrix("_VP", (P * V));
             AOCam.Render();
+
         }
         for (int i = 0; i < mfs.Length; i++) {
             mfs[i].transform.parent = saveParent[i];
@@ -313,7 +318,6 @@ public class geoAO : MonoBehaviour {
     }
 
     void DisplayAO() {
-
         if (true) { //Create a texture containing AO information read by the mesh shader
             List<Vector2[]> alluv = new List<Vector2[]>(mfs.Length);
 
