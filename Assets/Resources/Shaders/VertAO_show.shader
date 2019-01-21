@@ -25,8 +25,8 @@ Shader "AO/VertAOOpti" {
 	Properties {
 		_MainTex ("Base (RGB)", 2D) = "white" {}
 		_AOColor ("AO Color", Color) = (0,0,0,1)
-		_AOIntensity ("AO Intensity", Range(0, 1.25)) = 1.0
-		_AOPower ("AO Power", Range(1, 10)) = 10
+		_AOIntensity ("AO Intensity", Range(0.0, 1.5)) = 1.1
+		_AOPower ("AO Power", Range(5, 50)) = 10
 		_AOTex ("AO Texture", 2D) = "white" {}
 
 
