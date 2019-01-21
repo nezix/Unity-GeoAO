@@ -27,323 +27,331 @@ using System.Collections.Generic;
 
 public class geoAO : MonoBehaviour {
 
-	public enum samplesAOpreset  {
-		VeryLow = 16,
-		Low = 36,
-		Medium = 64,
-		High = 144,
-		VeryHigh = 256,
-		TooMuch = 1024,
-		WayTooMuch = 2048
-	}
+    public enum samplesAOpreset  {
+        VeryLow = 16,
+        Low = 36,
+        Medium = 64,
+        High = 144,
+        VeryHigh = 256,
+        TooMuch = 1024,
+        WayTooMuch = 2048
+    }
+
+    public LayerMask AOLayer;
 
     public samplesAOpreset samplesAO = samplesAOpreset.High;
 
-	public Transform meshParent;
-	private MeshFilter[] mfs;
-	private Vector3[] saveScale;
-	private Transform[] saveParent;
-	private Vector3[] savePos;
-	private Quaternion[] saveRot;
+    public Transform meshParent;
+    private MeshFilter[] mfs;
+    private int[] saveLayer;
+    private Vector3[] saveScale;
+    private Transform[] saveParent;
+    private Vector3[] savePos;
+    private Quaternion[] saveRot;
 
-	private Resolution saveResolution;
-	private bool wasFullScreen;
+    private Resolution saveResolution;
+    private bool wasFullScreen;
 
-	private Vector3[] rayDir;
+    private Vector3[] rayDir;
 
-	private Bounds allBounds;
+    private Bounds allBounds;
 
-	private Camera AOCam;
-	private RenderTexture AORT;
-	private RenderTexture AORT2;
-	private Texture2D vertTex;
+    private Camera AOCam;
+    private RenderTexture AORT;
+    private RenderTexture AORT2;
+    private Texture2D vertTex;
 
-	private Material AOMat;
+    private Material AOMat;
 
-	private int nbVert = 0;
+    private int nbVert = 0;
 
-	private int vertByRow = 256;
+    private int vertByRow = 256;
 
-	void Start () {
+    void Start () {
 
-		float timerAO = Time.realtimeSinceStartup;
+        AOLayer = 1 << LayerMask.NameToLayer("AOLayer");
 
-		nbVert = 0;
-		mfs = meshParent.GetComponentsInChildren<MeshFilter>();
-		for(int i=0;i<mfs.Length;i++)
-			nbVert += mfs[i].mesh.vertices.Length;
+        float timerAO = Time.realtimeSinceStartup;
 
-		InitSamplePos();
+        nbVert = 0;
+        mfs = meshParent.GetComponentsInChildren<MeshFilter>();
+        for (int i = 0; i < mfs.Length; i++)
+            nbVert += mfs[i].mesh.vertices.Length;
 
-		CreateAOCam();
+        InitSamplePos();
 
-		DoAO();
+        CreateAOCam();
 
-		DisplayAO();
+        DoAO();
 
-		float timerAO2 = Time.realtimeSinceStartup;
-        Debug.Log("Time for AO  = "+(timerAO2 - timerAO));
-	}
+        DisplayAO();
 
-	void InitSamplePos(){
+        float timerAO2 = Time.realtimeSinceStartup;
+        Debug.Log("Time for AO  = " + (timerAO2 - timerAO));
+    }
 
-		getBounds();
+    void InitSamplePos() {
 
-		Vector3 boundMax = allBounds.size;
-		float radSurface = Mathf.Max(boundMax.x,Mathf.Max(boundMax.y,boundMax.z));
-		rayDir = new Vector3[(int)samplesAO];
+        getBounds();
 
-		float golden_angle = Mathf.PI * (3 - Mathf.Sqrt(5));
-		float start =  1 - 1.0f/(int)samplesAO;
-		float end = 1.0f/(int)samplesAO - 1;
+        Vector3 boundMax = allBounds.size;
+        float radSurface = Mathf.Max(boundMax.x, Mathf.Max(boundMax.y, boundMax.z));
+        rayDir = new Vector3[(int)samplesAO];
 
-		for(int i=0;i<(int)samplesAO;i++){
-			float theta = golden_angle * i;
-			float z = start+ i*(end-start)/(int)samplesAO;
-			float radius = Mathf.Sqrt(1- z*z);
-			rayDir[i].x = radius * Mathf.Cos(theta);
-			rayDir[i].y = radius * Mathf.Sin(theta);
-			rayDir[i].z = z;
-			rayDir[i] *= radSurface;
-			rayDir[i] += allBounds.center;
+        float golden_angle = Mathf.PI * (3 - Mathf.Sqrt(5));
+        float start =  1 - 1.0f / (int)samplesAO;
+        float end = 1.0f / (int)samplesAO - 1;
 
-			// Debug
-			// GameObject test = GameObject.CreatePrimitive(PrimitiveType.Cube);
-			// test.transform.localScale = Vector3.one *1f;
-			// test.transform.position = rayDir[i];
-			// test.transform.parent = bigParent.transform;
-		}
-	}
+        for (int i = 0; i < (int)samplesAO; i++) {
+            float theta = golden_angle * i;
+            float z = start + i * (end - start) / (int)samplesAO;
+            float radius = Mathf.Sqrt(1 - z * z);
+            rayDir[i].x = radius * Mathf.Cos(theta);
+            rayDir[i].y = radius * Mathf.Sin(theta);
+            rayDir[i].z = z;
+            rayDir[i] *= radSurface;
+            rayDir[i] += allBounds.center;
 
-	void getBounds(){
-		saveScale = new Vector3[mfs.Length];
-		saveParent = new Transform[mfs.Length];
-		savePos = new Vector3[mfs.Length];
-		saveRot = new Quaternion[mfs.Length];
+            // Debug
+            // GameObject test = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            // test.transform.localScale = Vector3.one *1f;
+            // test.transform.position = rayDir[i];
+        }
+    }
 
-		for(int i=0;i<mfs.Length;i++){
-			saveScale[i] = mfs[i].transform.localScale;
-			saveParent[i] = mfs[i].transform.parent;
-			savePos[i] = mfs[i].transform.position;
-			saveRot[i] = mfs[i].transform.rotation;
-			if(i==0)
-				allBounds = mfs[i].mesh.bounds;
-			else
-				allBounds.Encapsulate(mfs[i].mesh.bounds);
+    void getBounds() {
+        saveLayer = new int[mfs.Length];
+        saveScale = new Vector3[mfs.Length];
+        saveParent = new Transform[mfs.Length];
+        savePos = new Vector3[mfs.Length];
+        saveRot = new Quaternion[mfs.Length];
 
-		}
-	}
+        for (int i = 0; i < mfs.Length; i++) {
+            saveScale[i] = mfs[i].transform.localScale;
+            saveParent[i] = mfs[i].transform.parent;
+            savePos[i] = mfs[i].transform.position;
+            saveRot[i] = mfs[i].transform.rotation;
+            saveLayer[i] = mfs[i].gameObject.layer;
+            if (i == 0)
+                allBounds = mfs[i].mesh.bounds;
+            else
+                allBounds.Encapsulate(mfs[i].mesh.bounds);
 
-	void CreateAOCam(){
+        }
+    }
 
-		AOCam = gameObject.AddComponent<Camera>();
-		if(AOCam == null)
-			AOCam = gameObject.GetComponent<Camera>();
+    void CreateAOCam() {
+
+        AOCam = gameObject.AddComponent<Camera>();
+        if (AOCam == null)
+            AOCam = gameObject.GetComponent<Camera>();
 
 
-        AOCam.enabled=false;
+        AOCam.enabled = false;
 
         // AOCam.CopyFrom(Camera.main);
         AOCam.orthographic = true;
-        AOCam.cullingMask=1<<0; // default layer for now
+        AOCam.cullingMask = 1 << LayerMask.NameToLayer("AOLayer");
         AOCam.clearFlags = CameraClearFlags.Depth;
-        AOCam.nearClipPlane = 1f;
+        AOCam.nearClipPlane = 0.1f;
         AOCam.farClipPlane = 500f;
 
-		AOCam.depthTextureMode = DepthTextureMode.Depth ;
+        AOCam.depthTextureMode = DepthTextureMode.Depth ;
 
-		saveResolution = Screen.currentResolution;
-		wasFullScreen = Screen.fullScreen;
+        saveResolution = Screen.currentResolution;
+        wasFullScreen = Screen.fullScreen;
 
-		changeAspectRatio();
+        changeAspectRatio();
 
         float screenRatio = 1f;
 
         float targetRatio = allBounds.size.x / allBounds.size.y;
 
         if (screenRatio >= targetRatio)
-        	AOCam.orthographicSize = 1.1f * (allBounds.size.y / 2);
+            AOCam.orthographicSize = 1.1f * (allBounds.size.y / 2);
         else {
             float differenceInSize = targetRatio / screenRatio;
-            AOCam.orthographicSize = 1.1f*(allBounds.size.y / 2 * differenceInSize);
+            AOCam.orthographicSize = 1.1f * (allBounds.size.y / 2 * differenceInSize);
         }
 
         AOMat = new Material(Shader.Find("Custom/VertexAO"));
 
 
-        int height = (int) Mathf.Ceil(nbVert/(float)vertByRow);
+        int height = (int) Mathf.Ceil(nbVert / (float)vertByRow);
 
-        Debug.Log("Creating a texture of size : "+vertByRow+" x "+height);
-        Debug.Log("Vertices = "+nbVert);
+        Debug.Log("Creating a texture of size : " + vertByRow + " x " + height);
+        Debug.Log("Vertices = " + nbVert);
 
-        AORT = new RenderTexture(vertByRow,height,0,RenderTextureFormat.ARGBHalf);
+        AORT = new RenderTexture(vertByRow, height, 0, RenderTextureFormat.ARGBHalf);
         AORT.anisoLevel = 0;
         AORT.filterMode = FilterMode.Point;
 
-        AORT2 = new RenderTexture(vertByRow,height,0,RenderTextureFormat.ARGBHalf);
+        AORT2 = new RenderTexture(vertByRow, height, 0, RenderTextureFormat.ARGBHalf);
         AORT2.anisoLevel = 0;
         AORT2.filterMode = FilterMode.Point;
 
-        vertTex = new Texture2D(vertByRow,height,TextureFormat.RGBAFloat,false);
+        vertTex = new Texture2D(vertByRow, height, TextureFormat.RGBAFloat, false);
         vertTex.anisoLevel = 0;
         vertTex.filterMode = FilterMode.Point;
 
-       	FillVertexTexture();
-	}
+        FillVertexTexture();
+    }
 
-	void FillVertexTexture(){
-		int idVert = 0;
-		int sizeRT = vertTex.width * vertTex.height;
-		Color[] vertInfo = new Color[sizeRT];
-		for(int i=0;i<mfs.Length;i++){
-			Vector3[] vert = mfs[i].mesh.vertices;
-			for(int j=0;j<vert.Length;j++){
-				vertInfo[idVert].r = vert[j].x;
-				vertInfo[idVert].g = vert[j].y;
-				vertInfo[idVert].b = vert[j].z;
-				idVert++;
-			}
-		}
-		vertTex.SetPixels(vertInfo);
-        vertTex.Apply(false,false);
-	}
+    void FillVertexTexture() {
+        int idVert = 0;
+        int sizeRT = vertTex.width * vertTex.height;
+        Color[] vertInfo = new Color[sizeRT];
+        for (int i = 0; i < mfs.Length; i++) {
+            Vector3[] vert = mfs[i].mesh.vertices;
+            for (int j = 0; j < vert.Length; j++) {
+                vertInfo[idVert].r = vert[j].x;
+                vertInfo[idVert].g = vert[j].y;
+                vertInfo[idVert].b = vert[j].z;
+                idVert++;
+            }
+        }
+        vertTex.SetPixels(vertInfo);
+        vertTex.Apply(false, false);
+    }
 
-	void changeAspectRatio(){
-		float targetaspect = 1.0f;
+    void changeAspectRatio() {
+        float targetaspect = 1.0f;
 
-	    // determine the game window's current aspect ratio
-	    float windowaspect = (float)Screen.width / (float)Screen.height;
+        // determine the game window's current aspect ratio
+        float windowaspect = (float)Screen.width / (float)Screen.height;
 
-	    // current viewport height should be scaled by this amount
-	    float scaleheight = windowaspect / targetaspect;
-
-
-	    // if scaled height is less than current height, add letterbox
-	    if (scaleheight < 1.0f)
-	    {  
-	        Rect rect = AOCam.rect;
-
-	        rect.width = 1.0f;
-	        rect.height = scaleheight;
-	        rect.x = 0;
-	        rect.y = (1.0f - scaleheight) / 2.0f;
-	        
-	        AOCam.rect = rect;
-	    }
-	    else // add pillarbox
-	    {
-	        float scalewidth = 1.0f / scaleheight;
-
-	        Rect rect = AOCam.rect;
-
-	        rect.width = scalewidth;
-	        rect.height = 1.0f;
-	        rect.x = (1.0f - scalewidth) / 2.0f;
-	        rect.y = 0;
-
-	        AOCam.rect = rect;
-	    }
-
-	}
+        // current viewport height should be scaled by this amount
+        float scaleheight = windowaspect / targetaspect;
 
 
-	void DoAO(){
+        // if scaled height is less than current height, add letterbox
+        if (scaleheight < 1.0f)
+        {
+            Rect rect = AOCam.rect;
 
+            rect.width = 1.0f;
+            rect.height = scaleheight;
+            rect.x = 0;
+            rect.y = (1.0f - scaleheight) / 2.0f;
 
-        AOMat.SetInt("_uCount",(int)samplesAO);
-        AOMat.SetTexture("_AOTex",AORT);
-        AOMat.SetTexture("_AOTex2",AORT2);
-        AOMat.SetTexture("_uVertex",vertTex);
+            AOCam.rect = rect;
+        }
+        else // add pillarbox
+        {
+            float scalewidth = 1.0f / scaleheight;
 
-        for(int i=0;i<mfs.Length;i++){
-        	mfs[i].transform.parent = null;
-        	mfs[i].transform.position = Vector3.zero;
-        	mfs[i].transform.rotation = Quaternion.Euler(0f,0f,0f);
-        	mfs[i].transform.localScale = Vector3.one;
+            Rect rect = AOCam.rect;
+
+            rect.width = scalewidth;
+            rect.height = 1.0f;
+            rect.x = (1.0f - scalewidth) / 2.0f;
+            rect.y = 0;
+
+            AOCam.rect = rect;
         }
 
-		for(int i=0;i<(int)samplesAO;i++){
+    }
 
-        	AOCam.transform.position = rayDir[i];
-        	AOCam.transform.LookAt(allBounds.center);
 
-        	//Not sure if necessay ?
-				Matrix4x4 V = AOCam.worldToCameraMatrix;
-				Matrix4x4 P = AOCam.projectionMatrix;
+    void DoAO() {
 
-				bool d3d = SystemInfo.graphicsDeviceVersion.IndexOf("Direct3D") > -1;
-				if (d3d) {
-				    // Invert Y for rendering to a render texture
-				    for (int a = 0; a < 4; a++) {
-				        P[1,a] = -P[1,a];
-				    }
-				    // Scale and bias from OpenGL -> D3D depth range
-				    for (int a = 0; a < 4; a++) {
-				        P[2,a] = P[2,a]*0.5f + P[3,a]*0.5f;
-				    }
-				}
 
-        	AOMat.SetMatrix("_VP",(P*V));
-        	AOCam.Render();
-        }
-        for(int i=0;i<mfs.Length;i++){
-        	mfs[i].transform.parent = saveParent[i];
-        	mfs[i].transform.position = savePos[i];
-        	mfs[i].transform.localScale = saveScale[i];
-        	mfs[i].transform.rotation = saveRot[i];
+        AOMat.SetInt("_uCount", (int)samplesAO);
+        AOMat.SetTexture("_AOTex", AORT);
+        AOMat.SetTexture("_AOTex2", AORT2);
+        AOMat.SetTexture("_uVertex", vertTex);
+
+        for (int i = 0; i < mfs.Length; i++) {
+            mfs[i].transform.parent = null;
+            mfs[i].transform.position = Vector3.zero;
+            mfs[i].transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+            mfs[i].transform.localScale = Vector3.one;
+            mfs[i].gameObject.layer = LayerMask.NameToLayer("AOLayer");
         }
 
-	}
-	void OnRenderImage (RenderTexture source, RenderTexture destination) {
+        for (int i = 0; i < (int)samplesAO; i++) {
+
+            AOCam.transform.position = rayDir[i];
+            AOCam.transform.LookAt(allBounds.center);
+
+            //Not sure if necessay ?
+            Matrix4x4 V = AOCam.worldToCameraMatrix;
+            Matrix4x4 P = AOCam.projectionMatrix;
+
+            bool d3d = SystemInfo.graphicsDeviceVersion.IndexOf("Direct3D") > -1;
+            if (d3d) {
+                // Invert Y for rendering to a render texture
+                for (int a = 0; a < 4; a++) {
+                    P[1, a] = -P[1, a];
+                }
+                // Scale and bias from OpenGL -> D3D depth range
+                for (int a = 0; a < 4; a++) {
+                    P[2, a] = P[2, a] * 0.5f + P[3, a] * 0.5f;
+                }
+            }
+
+            AOMat.SetMatrix("_VP", (P * V));
+            AOCam.Render();
+        }
+        for (int i = 0; i < mfs.Length; i++) {
+            mfs[i].transform.parent = saveParent[i];
+            mfs[i].transform.position = savePos[i];
+            mfs[i].transform.localScale = saveScale[i];
+            mfs[i].transform.rotation = saveRot[i];
+            mfs[i].gameObject.layer = saveLayer[i];
+        }
+
+    }
+    void OnRenderImage (RenderTexture source, RenderTexture destination) {
 
 
-		var matrix = AOCam.cameraToWorldMatrix;
-		AOMat.SetMatrix("_InverseView",matrix);
-		Graphics.Blit(null, AORT, AOMat);
-		AOCam.targetTexture = null;
-		Graphics.Blit(AORT,AORT2);
-	}
+        var matrix = AOCam.cameraToWorldMatrix;
+        AOMat.SetMatrix("_InverseView", matrix);
+        Graphics.Blit(null, AORT, AOMat);
+        AOCam.targetTexture = null;
+        Graphics.Blit(AORT, AORT2);
+    }
 
-	void DisplayAO(){
+    void DisplayAO() {
 
-		if(true){//Create a texture containing AO information read by the mesh shader
-			List<Vector2[]> alluv = new List<Vector2[]>(mfs.Length);
+        if (true) { //Create a texture containing AO information read by the mesh shader
+            List<Vector2[]> alluv = new List<Vector2[]>(mfs.Length);
 
-			Material matShowAO = new Material(Shader.Find("AO/VertAOOpti"));
-			matShowAO.SetTexture("_AOTex",AORT);
-			float w = (float)(AORT2.width-1);
-			float h =(float)(AORT2.height-1);
-			int idVert = 0;
-			for(int i=0;i<mfs.Length;i++){
-				Vector3[] vert = mfs[i].mesh.vertices;
-				alluv.Add( new Vector2[vert.Length] );
-				for(int j=0;j<vert.Length;j++){
-					alluv[i][j] = new Vector2((idVert%vertByRow)/w,(idVert/(vertByRow)/h));
-					idVert++;
-				}
-				mfs[i].mesh.uv2 = alluv[i];
-				mfs[i].gameObject.GetComponent<Renderer>().material = matShowAO;
-			}
-		}
-		else{//Directly modify the colors of the mesh (slower)
+            Material matShowAO = new Material(Shader.Find("AO/VertAOOpti"));
+            matShowAO.SetTexture("_AOTex", AORT);
+            float w = (float)(AORT2.width - 1);
+            float h = (float)(AORT2.height - 1);
+            int idVert = 0;
+            for (int i = 0; i < mfs.Length; i++) {
+                Vector3[] vert = mfs[i].mesh.vertices;
+                alluv.Add( new Vector2[vert.Length] );
+                for (int j = 0; j < vert.Length; j++) {
+                    alluv[i][j] = new Vector2((idVert % vertByRow) / w, (idVert / (vertByRow) / h));
+                    idVert++;
+                }
+                mfs[i].mesh.uv2 = alluv[i];
+                mfs[i].gameObject.GetComponent<Renderer>().material = matShowAO;
+            }
+        }
+        else { //Directly modify the colors of the mesh (slower)
 
-			List<Color> allColors = new List<Color>(nbVert);
-			RenderTexture.active = AORT2;
-			Texture2D resulTex = new Texture2D(AORT2.width,AORT2.height,TextureFormat.RGBAHalf,false);
-			resulTex.ReadPixels( new Rect(0, 0, AORT2.width,AORT2.height), 0, 0);
+            List<Color> allColors = new List<Color>(nbVert);
+            RenderTexture.active = AORT2;
+            Texture2D resulTex = new Texture2D(AORT2.width, AORT2.height, TextureFormat.RGBAHalf, false);
+            resulTex.ReadPixels( new Rect(0, 0, AORT2.width, AORT2.height), 0, 0);
 
-			for(int i=0;i<nbVert;i++){
-				allColors.Add(resulTex.GetPixel(i%vertByRow,i/(vertByRow)));
-			}
+            for (int i = 0; i < nbVert; i++) {
+                allColors.Add(resulTex.GetPixel(i % vertByRow, i / (vertByRow)));
+            }
 
 
-			int idVert = 0;
-			for(int i=0;i<mfs.Length;i++){
-				mfs[i].mesh.colors = allColors.GetRange(idVert,mfs[i].mesh.vertices.Length).ToArray();
-				idVert += mfs[i].mesh.vertices.Length;
-			}
-		}
-	}
+            int idVert = 0;
+            for (int i = 0; i < mfs.Length; i++) {
+                mfs[i].mesh.colors = allColors.GetRange(idVert, mfs[i].mesh.vertices.Length).ToArray();
+                idVert += mfs[i].mesh.vertices.Length;
+            }
+        }
+    }
 
 }
 
