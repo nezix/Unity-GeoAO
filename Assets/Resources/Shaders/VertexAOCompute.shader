@@ -20,12 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-Shader "Custom/VertexAO" {
-
+Shader "GeoAO/VertexAO" {
+    //Shader used to compute AO value for each vertex
+    
     Properties {
         _AOTex ("AO Texture to blend", 2D) = "white"{}
         _AOTex2 ("AO Texture to blend", 2D) = "white"{}
-        _uCount ("Nomber of total samples",int) = 128
+        _uCount ("Total samples",int) = 128
         _uVertex ("Vertex texture",2D) = "white" {}
     }
 
@@ -112,17 +113,16 @@ Shader "Custom/VertexAO" {
                 float4 posInCamDepth = ComputeScreenPos(vertexpos);
                 posInCamDepth.xyz = posInCamDepth.xyz/posInCamDepth.w;
                 
-                float3 recZ = depthFromDepthTexture(posInCamDepth);
-                float z = recZ.z;
+                float z = depthFromDepthTexture(posInCamDepth).z;
 
-                float o = 1.0;
+                float o = 2.0;//Higher than 1 to decrease texture darkness
 
                 if( abs(vertex.z - z) > 0.05)
                     o = 0.0;
 
-                float src = tex2D(_AOTex2,uv).x;
-                o = ((_uCount - 1.0)/_uCount) * src + (1.0/_uCount) * o;
-                return float4(o,1,1,o);
+                float src = tex2D(_AOTex2,uv).w;
+                o =  src + (o/_uCount);//Previous value + new value 
+                return float4(o,o,o,o);
 
             }
 

@@ -21,9 +21,11 @@
 // SOFTWARE.
 
 using UnityEngine;
+using UnityEngine.Rendering;
 using System.Collections;
 using System.Collections.Generic;
 
+namespace UnityGeoAO {
 
 public class geoAO : MonoBehaviour {
 
@@ -44,21 +46,15 @@ public class geoAO : MonoBehaviour {
     public Transform meshParent;
     private MeshFilter[] mfs;
     private int[] saveLayer;
-    private Vector3[] saveScale;
-    private Transform[] saveParent;
-    private Vector3[] savePos;
-    private Quaternion[] saveRot;
-
-    private Resolution saveResolution;
-    private bool wasFullScreen;
+    private ShadowCastingMode[] saveShadowMode;
 
     private Vector3[] rayDir;
 
     private Bounds allBounds;
 
     private Camera AOCam;
-    private RenderTexture AORT;
-    private RenderTexture AORT2;
+    public RenderTexture AORT;
+    public RenderTexture AORT2;
     private Texture2D vertTex;
 
     private Material AOMat;
@@ -66,6 +62,8 @@ public class geoAO : MonoBehaviour {
     private int nbVert = 0;
 
     private int vertByRow = 256;
+
+    private float radSurface;
 
     void Start () {
 
@@ -75,8 +73,16 @@ public class geoAO : MonoBehaviour {
 
         nbVert = 0;
         mfs = meshParent.GetComponentsInChildren<MeshFilter>();
-        for (int i = 0; i < mfs.Length; i++)
-            nbVert += mfs[i].mesh.vertices.Length;
+
+        List<MeshFilter> tmpMF = new List<MeshFilter>(mfs.Length);
+
+        for (int i = 0; i < mfs.Length; i++) {
+            if (mfs[i].gameObject.GetComponent<MeshRenderer>() != null) {
+                nbVert += mfs[i].mesh.vertices.Length;
+                tmpMF.Add(mfs[i]);
+            }
+        }
+        mfs = tmpMF.ToArray();
 
         InitSamplePos();
 
@@ -94,8 +100,7 @@ public class geoAO : MonoBehaviour {
 
         getBounds();
 
-        Vector3 boundMax = allBounds.size;
-        float radSurface = Mathf.Max(boundMax.x, Mathf.Max(boundMax.y, boundMax.z));
+        radSurface = Mathf.Max(allBounds.extents.x, Mathf.Max(allBounds.extents.y, allBounds.extents.z));
         rayDir = new Vector3[(int)samplesAO];
 
         float golden_angle = Mathf.PI * (3 - Mathf.Sqrt(5));
@@ -109,33 +114,26 @@ public class geoAO : MonoBehaviour {
             rayDir[i].x = radius * Mathf.Cos(theta);
             rayDir[i].y = radius * Mathf.Sin(theta);
             rayDir[i].z = z;
-            rayDir[i] *= radSurface;
-            rayDir[i] += allBounds.center;
-
-            // Debug
-            // GameObject test = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            // test.transform.localScale = Vector3.one *1f;
-            // test.transform.position = rayDir[i];
+            rayDir[i] = allBounds.center + rayDir[i] * radSurface;
         }
     }
 
     void getBounds() {
         saveLayer = new int[mfs.Length];
-        saveScale = new Vector3[mfs.Length];
-        saveParent = new Transform[mfs.Length];
-        savePos = new Vector3[mfs.Length];
-        saveRot = new Quaternion[mfs.Length];
+        saveShadowMode = new ShadowCastingMode[mfs.Length];
 
         for (int i = 0; i < mfs.Length; i++) {
-            saveScale[i] = mfs[i].transform.localScale;
-            saveParent[i] = mfs[i].transform.parent;
-            savePos[i] = mfs[i].transform.position;
-            saveRot[i] = mfs[i].transform.rotation;
+            MeshRenderer mr = mfs[i].gameObject.GetComponent<MeshRenderer>();
+
             saveLayer[i] = mfs[i].gameObject.layer;
+            saveShadowMode[i] = mr.shadowCastingMode;
+
             if (i == 0)
-                allBounds = mfs[i].mesh.bounds;
+                allBounds = mr.bounds;
             else
-                allBounds.Encapsulate(mfs[i].mesh.bounds);
+                allBounds.Encapsulate(mr.bounds);
+
+            mr.shadowCastingMode = ShadowCastingMode.TwoSided;
 
         }
     }
@@ -149,42 +147,24 @@ public class geoAO : MonoBehaviour {
 
         AOCam.enabled = false;
 
-        // AOCam.CopyFrom(Camera.main);
         AOCam.orthographic = true;
         AOCam.cullingMask = 1 << LayerMask.NameToLayer("AOLayer");
         AOCam.clearFlags = CameraClearFlags.Depth;
-        AOCam.nearClipPlane = 0.1f;
-        AOCam.farClipPlane = 500f;
+        AOCam.nearClipPlane = 0.01f;
         AOCam.allowHDR = false;
         AOCam.allowMSAA = false;
         AOCam.allowDynamicResolution = false;
 
-
         AOCam.depthTextureMode = DepthTextureMode.Depth ;
 
-        saveResolution = Screen.currentResolution;
-        wasFullScreen = Screen.fullScreen;
+        AOCam.orthographicSize = radSurface;
+        AOCam.farClipPlane = radSurface * 2;
+        AOCam.aspect = 1f;
 
-        changeAspectRatio();
-
-        float screenRatio = 1f;
-
-        float targetRatio = allBounds.size.x / allBounds.size.y;
-
-        if (screenRatio >= targetRatio)
-            AOCam.orthographicSize = 2.0f * (allBounds.size.y / 2);
-        else {
-            float differenceInSize = targetRatio / screenRatio;
-            AOCam.orthographicSize = 2.0f * (allBounds.size.y / 2 * differenceInSize);
-        }
-
-        AOMat = new Material(Shader.Find("Custom/VertexAO"));
+        AOMat = new Material(Shader.Find("GeoAO/VertexAO"));
 
 
         int height = (int) Mathf.Ceil(nbVert / (float)vertByRow);
-
-        Debug.Log("Creating a texture of size : " + vertByRow + " x " + height);
-        Debug.Log("Vertices = " + nbVert);
 
         AORT = new RenderTexture(vertByRow, height, 0, RenderTextureFormat.ARGBHalf);
         AORT.anisoLevel = 0;
@@ -206,11 +186,13 @@ public class geoAO : MonoBehaviour {
         int sizeRT = vertTex.width * vertTex.height;
         Color[] vertInfo = new Color[sizeRT];
         for (int i = 0; i < mfs.Length; i++) {
+            Transform cur = mfs[i].gameObject.transform;
             Vector3[] vert = mfs[i].mesh.vertices;
             for (int j = 0; j < vert.Length; j++) {
-                vertInfo[idVert].r = vert[j].x;
-                vertInfo[idVert].g = vert[j].y;
-                vertInfo[idVert].b = vert[j].z;
+                Vector3 pos = cur.TransformPoint(vert[j]);
+                vertInfo[idVert].r = pos.x;
+                vertInfo[idVert].g = pos.y;
+                vertInfo[idVert].b = pos.z;
                 idVert++;
             }
         }
@@ -266,10 +248,6 @@ public class geoAO : MonoBehaviour {
         AOMat.SetTexture("_uVertex", vertTex);
 
         for (int i = 0; i < mfs.Length; i++) {
-            mfs[i].transform.parent = null;
-            mfs[i].transform.position = Vector3.zero;
-            mfs[i].transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-            mfs[i].transform.localScale = Vector3.one;
             mfs[i].gameObject.layer = LayerMask.NameToLayer("AOLayer");
         }
 
@@ -299,11 +277,8 @@ public class geoAO : MonoBehaviour {
 
         }
         for (int i = 0; i < mfs.Length; i++) {
-            mfs[i].transform.parent = saveParent[i];
-            mfs[i].transform.position = savePos[i];
-            mfs[i].transform.localScale = saveScale[i];
-            mfs[i].transform.rotation = saveRot[i];
             mfs[i].gameObject.layer = saveLayer[i];
+            mfs[i].gameObject.GetComponent<MeshRenderer>().shadowCastingMode = saveShadowMode[i];
         }
 
     }
@@ -321,7 +296,7 @@ public class geoAO : MonoBehaviour {
         if (true) { //Create a texture containing AO information read by the mesh shader
             List<Vector2[]> alluv = new List<Vector2[]>(mfs.Length);
 
-            Material matShowAO = new Material(Shader.Find("AO/VertAOOpti"));
+            Material matShowAO = new Material(Shader.Find("GeoAO/VertAOOpti"));
             matShowAO.SetTexture("_AOTex", AORT);
             float w = (float)(AORT2.width - 1);
             float h = (float)(AORT2.height - 1);
@@ -359,3 +334,4 @@ public class geoAO : MonoBehaviour {
 
 }
 
+}

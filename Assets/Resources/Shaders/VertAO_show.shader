@@ -20,16 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-Shader "AO/VertAOOpti" {
+Shader "GeoAO/VertAOOpti" {
+	//Example shader to show how to use computed AO value
 	
 	Properties {
 		_MainTex ("Base (RGB)", 2D) = "white" {}
 		_AOColor ("AO Color", Color) = (0,0,0,1)
-		_AOIntensity ("AO Intensity", Range(0.0, 1.5)) = 1.1
-		_AOPower ("AO Power", Range(5, 50)) = 10
+		_AOScale ("AO Scale", Range(0.0, 5.0)) = 1.0
 		_AOTex ("AO Texture", 2D) = "white" {}
-
-
 	}
 	
 	SubShader {
@@ -48,8 +46,7 @@ Shader "AO/VertAOOpti" {
 
 			sampler2D _MainTex;
 			half4 _AOColor;
-			float _AOIntensity;
-			float _AOPower;
+			float _AOScale;
 
 			struct Input {
 				float2 uv_MainTex : TEXCOORD0;
@@ -65,7 +62,7 @@ Shader "AO/VertAOOpti" {
 
 			void surf (Input IN, inout SurfaceOutput o) {
 				half4 c = tex2D (_MainTex, IN.uv_MainTex);
-				half ao = pow((1-IN.aoVal)*_AOIntensity, _AOPower );
+				half ao = (1-IN.aoVal)*_AOScale;
 
 				o.Albedo = lerp(c.rgb, _AOColor, ao);
 				o.Alpha = c.a;
