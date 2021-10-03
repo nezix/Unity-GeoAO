@@ -55,6 +55,7 @@ Shader "GeoAO/VertexAO" {
             uniform float4 _uVertex_TexelSize;
 
             uniform float _uCount;
+            uniform int _curCount;
 
             float4x4 _VP;
             float4x4 _InverseView;
@@ -121,6 +122,7 @@ Shader "GeoAO/VertexAO" {
                     o = 0.0;
 
                 float src = tex2D(_AOTex2,uv).w;
+                if (_curCount == 0) src = 0.0f;//Fix clearing texture on OpenGL
                 o =  src + (o/_uCount);//Previous value + new value 
                 return float4(o,o,o,o);
 

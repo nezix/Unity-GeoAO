@@ -261,7 +261,8 @@ public class geoAO : MonoBehaviour {
             Matrix4x4 P = AOCam.projectionMatrix;
 
             bool d3d = SystemInfo.graphicsDeviceVersion.IndexOf("Direct3D") > -1;
-            if (d3d) {
+            bool metal = SystemInfo.graphicsDeviceVersion.IndexOf("Metal") > -1;
+            if (d3d || metal) {
                 // Invert Y for rendering to a render texture
                 for (int a = 0; a < 4; a++) {
                     P[1, a] = -P[1, a];
@@ -273,6 +274,7 @@ public class geoAO : MonoBehaviour {
             }
 
             AOMat.SetMatrix("_VP", (P * V));
+            AOMat.SetInt("_curCount", i);
             AOCam.Render();
 
         }
