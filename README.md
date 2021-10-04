@@ -15,7 +15,7 @@ Another shader is set to the meshes that reads the value for each vertex and dar
 
 This is an implementation of this technique in Unity : https://github.com/wwwtyro/geo-ambient-occlusion
 
-To make it fast, one of the hack I have to use is to move all the meshes at the origin position (0,0,0) and with the rotation (0,0,0) and scale (1,1,1) to avoid computing the real vertex positions in world space.
+~To make it fast, one of the hack I have to use is to move all the meshes at the origin position (0,0,0) and with the rotation (0,0,0) and scale (1,1,1) to avoid computing the real vertex positions in world space.~
 
 ~~You have to disable all other objects of the scene when computing the AO or play with layers because everything that will write to the depth map can interfere with the AO computation.~~
 
