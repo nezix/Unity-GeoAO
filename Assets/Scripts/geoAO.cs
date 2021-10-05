@@ -79,7 +79,7 @@ public class geoAO : MonoBehaviour {
 
         for (int i = 0; i < mfs.Length; i++) {
             if (mfs[i].gameObject.GetComponent<MeshRenderer>() != null) {
-                nbVert += mfs[i].mesh.vertexCount;
+                nbVert += mfs[i].sharedMesh.vertexCount;
                 tmpMF.Add(mfs[i]);
             }
         }
@@ -188,7 +188,7 @@ public class geoAO : MonoBehaviour {
         Color[] vertInfo = new Color[sizeRT];
         for (int i = 0; i < mfs.Length; i++) {
             Transform cur = mfs[i].gameObject.transform;
-            Vector3[] vert = mfs[i].mesh.vertices;
+            Vector3[] vert = mfs[i].sharedMesh.vertices;
             for (int j = 0; j < vert.Length; j++) {
                 Vector3 pos = cur.TransformPoint(vert[j]);
                 vertInfo[idVert].r = pos.x;
@@ -305,13 +305,13 @@ public class geoAO : MonoBehaviour {
             float h = (float)(AORT2.height - 1);
             int idVert = 0;
             for (int i = 0; i < mfs.Length; i++) {
-                Vector3[] vert = mfs[i].mesh.vertices;
+                Vector3[] vert = mfs[i].sharedMesh.vertices;
                 alluv.Add( new Vector2[vert.Length] );
                 for (int j = 0; j < vert.Length; j++) {
                     alluv[i][j] = new Vector2((idVert % vertByRow) / w, (idVert / (vertByRow) / h));
                     idVert++;
                 }
-                mfs[i].mesh.uv2 = alluv[i];
+                mfs[i].mesh.uv2 = alluv[i];//This creates a new instance of the mesh !
                 mfs[i].gameObject.GetComponent<Renderer>().material = matShowAO;
             }
         }
@@ -329,7 +329,7 @@ public class geoAO : MonoBehaviour {
 
             int idVert = 0;
             for (int i = 0; i < mfs.Length; i++) {
-                mfs[i].mesh.colors = allColors.GetRange(idVert, mfs[i].mesh.vertexCount).ToArray();
+                mfs[i].mesh.colors = allColors.GetRange(idVert, mfs[i].mesh.vertexCount).ToArray();//This creates a new instance of the mesh !
                 idVert += mfs[i].mesh.vertexCount;
             }
         }
