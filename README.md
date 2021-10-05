@@ -25,9 +25,7 @@ Computing AO for a 500k vertices Stanford dragon with 256 samples is done 0.15s 
 
 ## System
 
-Tested on Windows DX11, DX12 and OpenGL, macOS with OpenGL, Linux with OpenGL
-
-__Does not work on Metal__ 
+Tested on Windows DX11, DX12 and OpenGL, macOS with OpenGL and Metal, Linux with OpenGL
 
 
 ## Contribute
