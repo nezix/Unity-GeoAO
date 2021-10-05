@@ -79,7 +79,7 @@ public class geoAO : MonoBehaviour {
 
         for (int i = 0; i < mfs.Length; i++) {
             if (mfs[i].gameObject.GetComponent<MeshRenderer>() != null) {
-                nbVert += mfs[i].mesh.vertices.Length;
+                nbVert += mfs[i].mesh.vertexCount;
                 tmpMF.Add(mfs[i]);
             }
         }
