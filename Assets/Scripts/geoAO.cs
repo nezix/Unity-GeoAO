@@ -42,6 +42,7 @@ public class geoAO : MonoBehaviour {
     private LayerMask AOLayer;
 
     public samplesAOpreset samplesAO = samplesAOpreset.High;
+    public bool showAOWithVertColors = false;
 
     public Transform meshParent;
     private MeshFilter[] mfs;
@@ -295,7 +296,7 @@ public class geoAO : MonoBehaviour {
     }
 
     void DisplayAO() {
-        if (true) { //Create a texture containing AO information read by the mesh shader
+        if (!showAOWithVertColors) { //Create a texture containing AO information read by the mesh shader
             List<Vector2[]> alluv = new List<Vector2[]>(mfs.Length);
 
             Material matShowAO = new Material(Shader.Find("GeoAO/VertAOOpti"));
@@ -328,8 +329,8 @@ public class geoAO : MonoBehaviour {
 
             int idVert = 0;
             for (int i = 0; i < mfs.Length; i++) {
-                mfs[i].mesh.colors = allColors.GetRange(idVert, mfs[i].mesh.vertices.Length).ToArray();
-                idVert += mfs[i].mesh.vertices.Length;
+                mfs[i].mesh.colors = allColors.GetRange(idVert, mfs[i].mesh.vertexCount).ToArray();
+                idVert += mfs[i].mesh.vertexCount;
             }
         }
     }
