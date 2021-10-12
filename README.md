@@ -5,6 +5,8 @@ Fast ambient occlusion in Unity baked at runtime.
 
 ![alt tag](http://i.imgur.com/c1JhyMj.png)
 
+## For URP please check the URP branch [here](https://github.com/nezix/Unity-GeoAO/tree/URP)
+
 ## Explanations
 
 Unity does not allow to compute ambient occlusion on generated mesh at runtime and SSAO does not always provide the quality we deserve.
@@ -27,6 +29,7 @@ Computing AO for a 500k vertices Stanford dragon with 256 samples is done 0.15s 
 
 Tested on Windows DX11, DX12 and OpenGL, macOS with OpenGL and Metal, Linux with OpenGL
 
+**Now works with Universal Render Pipeline (URP)**
 
 ## Contribute
 
