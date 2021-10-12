@@ -25,6 +25,10 @@ using UnityEngine.Rendering;
 using System.Collections;
 using System.Collections.Generic;
 
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering.Universal;
+
+
 namespace UnityGeoAO {
 
 public class geoAO : MonoBehaviour {
@@ -38,6 +42,9 @@ public class geoAO : MonoBehaviour {
         TooMuch = 1024,
         WayTooMuch = 2048
     }
+
+    //Set this in the editor !
+    public ForwardRendererData forwardRendererData;
 
     private LayerMask AOLayer;
 
@@ -65,10 +72,42 @@ public class geoAO : MonoBehaviour {
     private int vertByRow = 256;
 
     private float radSurface;
+    const string AOCamName = "GeoAOCam";
+
+
+    void Awake()
+    {
+
+        AOLayer = 1 << LayerMask.NameToLayer("AOLayer");
+        AOMat = new Material(Shader.Find("GeoAO/VertexAO"));
+
+        var features = forwardRendererData.rendererFeatures;
+        foreach (var f in features)
+        {
+            if (f.name == "AOBlit")
+            {
+                Blit feature = (Blit)f;
+                Blit.BlitSettings settings = (Blit.BlitSettings)feature.settings;
+                settings.blitMaterial = AOMat;
+                settings.setInverseViewMatrix = true;
+                settings.dstType = Blit.Target.RenderTextureObject;
+                settings.cameraName = AOCamName;
+                settings.requireDepth = true;
+                settings.overrideGraphicsFormat = true;
+                settings.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R16G16B16A16_SFloat;
+            }
+        }
+
+        forwardRendererData.SetDirty();
+    }
 
     void Start () {
 
-        AOLayer = 1 << LayerMask.NameToLayer("AOLayer");
+        if (forwardRendererData == null) {
+            Debug.LogError("Please set forwardRendererData in the editor");
+            this.enabled = false;
+            return;
+        }
 
         float timerAO = Time.realtimeSinceStartup;
 
@@ -145,25 +184,32 @@ public class geoAO : MonoBehaviour {
         if (AOCam == null)
             AOCam = gameObject.GetComponent<Camera>();
 
+        //Set the name of the AOCamera gameobject to filter blit pass based on name
+        AOCam.gameObject.name = AOCamName;
 
-        AOCam.enabled = false;
+        AOCam.enabled = true;
 
         AOCam.orthographic = true;
         AOCam.cullingMask = 1 << LayerMask.NameToLayer("AOLayer");
         AOCam.clearFlags = CameraClearFlags.Depth;
-        AOCam.nearClipPlane = 0.01f;
+        AOCam.nearClipPlane = 0.0001f;
         AOCam.allowHDR = false;
         AOCam.allowMSAA = false;
         AOCam.allowDynamicResolution = false;
 
         AOCam.depthTextureMode = DepthTextureMode.Depth ;
 
-        AOCam.orthographicSize = radSurface;
+        AOCam.orthographicSize = radSurface * 1.1f;
         AOCam.farClipPlane = radSurface * 2;
         AOCam.aspect = 1f;
 
-        AOMat = new Material(Shader.Find("GeoAO/VertexAO"));
 
+
+        var additionalCamData = AOCam.GetUniversalAdditionalCameraData();
+        additionalCamData.renderShadows = false;
+        additionalCamData.requiresColorOption = CameraOverrideOption.On;
+        additionalCamData.requiresDepthOption = CameraOverrideOption.On;
+        additionalCamData.renderPostProcessing = true;
 
         int height = (int) Mathf.Ceil(nbVert / (float)vertByRow);
 
@@ -178,6 +224,20 @@ public class geoAO : MonoBehaviour {
         vertTex = new Texture2D(vertByRow, height, TextureFormat.RGBAFloat, false);
         vertTex.anisoLevel = 0;
         vertTex.filterMode = FilterMode.Point;
+
+        //Set last Blit settings
+        var features = forwardRendererData.rendererFeatures;
+        foreach (var f in features)
+        {
+            if (f.name == "AOBlit")
+            {
+                Blit feature = (Blit)f;
+                Blit.BlitSettings settings = (Blit.BlitSettings)feature.settings;
+                settings.dstTextureObject = AORT;
+            }
+        }
+
+        forwardRendererData.SetDirty();
 
         FillVertexTexture();
     }
@@ -257,7 +317,6 @@ public class geoAO : MonoBehaviour {
             AOCam.transform.position = rayDir[i];
             AOCam.transform.LookAt(allBounds.center);
 
-            //Not sure if necessay ?
             Matrix4x4 V = AOCam.worldToCameraMatrix;
             Matrix4x4 P = AOCam.projectionMatrix;
 
@@ -277,23 +336,18 @@ public class geoAO : MonoBehaviour {
             AOMat.SetMatrix("_VP", (P * V));
             AOMat.SetInt("_curCount", i);
             AOCam.Render();
+            
+            Graphics.CopyTexture(AORT, AORT2);
 
         }
         for (int i = 0; i < mfs.Length; i++) {
             mfs[i].gameObject.layer = saveLayer[i];
             mfs[i].gameObject.GetComponent<MeshRenderer>().shadowCastingMode = saveShadowMode[i];
         }
+        AOCam.enabled = false;
 
     }
-    void OnRenderImage (RenderTexture source, RenderTexture destination) {
 
-
-        var matrix = AOCam.cameraToWorldMatrix;
-        AOMat.SetMatrix("_InverseView", matrix);
-        Graphics.Blit(null, AORT, AOMat);
-        AOCam.targetTexture = null;
-        Graphics.Blit(AORT, AORT2);
-    }
 
     void DisplayAO() {
         if (!showAOWithVertColors) { //Create a texture containing AO information read by the mesh shader

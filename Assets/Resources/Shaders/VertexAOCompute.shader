@@ -27,6 +27,7 @@ Shader "GeoAO/VertexAO" {
         _AOTex ("AO Texture to blend", 2D) = "white"{}
         _AOTex2 ("AO Texture to blend", 2D) = "white"{}
         _uCount ("Total samples",int) = 128
+        _curCount ("Current sample",int) = 0
         _uVertex ("Vertex texture",2D) = "white" {}
     }
 
@@ -37,17 +38,17 @@ Shader "GeoAO/VertexAO" {
             Cull Off
             Fog { Mode off }
 
-            CGPROGRAM
+            HLSLPROGRAM
 
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
+            // #include "UnityCG.cginc"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             sampler2D _AOTex;
             sampler2D _AOTex2;
             uniform float4 _AOTex_TexelSize;
-
-            sampler2D _CameraDepthTexture;
 
             uniform sampler2D uPos;
             uniform sampler2D uSource;
@@ -70,11 +71,21 @@ Shader "GeoAO/VertexAO" {
                 const float near = _ProjectionParams.y;
                 const float far = _ProjectionParams.z;
 
-                float d = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
-                
-                #if defined(UNITY_REVERSED_Z)
-                    d = 1 - d;
+
+                #if UNITY_REVERSED_Z
+                    float d = SampleSceneDepth(uv);
+                #else
+                    // Adjust Z to match NDC for OpenGL ([-1, 1])
+                    float d = lerp(UNITY_NEAR_CLIP_VALUE, 1, SampleSceneDepth(uv));
                 #endif
+
+                
+                #if UNITY_REVERSED_Z
+                     d = 1 - d;
+                #endif
+
+                // Does not seem to work
+                // float3 worldPos = ComputeWorldSpacePosition(uv, d, UNITY_MATRIX_I_VP);
 
                 float zOrtho = lerp(near, far, d);
 
@@ -88,49 +99,55 @@ Shader "GeoAO/VertexAO" {
             }
 
             struct v2p {
-                float4 p : POSITION;
+                // float4 p : POSITION;
                 float4 srcPos : TEXCOORD0;
+                float4 posCS : POSITION;
 
             };
 
-            v2p vert (appdata_base v) {
+            struct Attributes
+            {
+                // The positionOS variable contains the vertex positions in object
+                // space.
+                float4 positionOS   : POSITION;
+            };
+
+            v2p vert (Attributes v) {
                 v2p o; // Shader output
 
-                o.p = UnityObjectToClipPos(v.vertex);
-                o.srcPos = ComputeScreenPos(o.p);
+                // 
+                o.posCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.srcPos = ComputeScreenPos(o.posCS);
 
                 return o;
             }
 
             half4 frag(v2p i) : SV_TARGET{
-                float2 uv = i.srcPos.xy/i.srcPos.w;
+                float2 uv = i.srcPos.xy / i.srcPos.w;
 
-                float2 posInTex = uv * _uVertex_TexelSize.zw;
 
-                float3 vertex = tex2D(_uVertex,uv).xyz;
+                float3 vertex = tex2D(_uVertex, uv).xyz;
 
                 //Vertex in clip space
-                float4 vertexpos = mul(_VP , float4(vertex,1.0));
+                float4 vertexpos = mul(_VP , float4(vertex, 1.0));
                 float4 posInCamDepth = ComputeScreenPos(vertexpos);
-                posInCamDepth.xyz = posInCamDepth.xyz/posInCamDepth.w;
+                posInCamDepth.xyz = posInCamDepth.xyz / posInCamDepth.w;
                 
                 float z = depthFromDepthTexture(posInCamDepth).z;
 
                 float o = 2.0;//Higher than 1 to decrease texture darkness
 
-                if( abs(vertex.z - z) > 0.05)
+                if( abs(vertex.z - z) > 0.01)
                     o = 0.0;
 
-                float src = tex2D(_AOTex2,uv).w;
+                float src = tex2D(_AOTex2, uv).w;
                 if (_curCount == 0) src = 0.0f;//Fix clearing texture on OpenGL
                 o =  src + (o/_uCount);//Previous value + new value 
                 return float4(o,o,o,o);
 
             }
 
-
-            ENDCG
+            ENDHLSL
         }
-
     }
 }
